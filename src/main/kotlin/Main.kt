@@ -5,12 +5,46 @@ import java.io.File
 import java.net.NetworkInterface
 import java.net.SocketException
 import java.sql.DriverManager
+import java.io.BufferedReader
+import java.io.InputStreamReader
+
+fun isNetworkConnectedWindows(): Boolean {
+    val process = Runtime.getRuntime().exec("powershell -Command Get-NetConnectionProfile | Where-Object { \$_.IPv4Connectivity -eq 'Internet' }")
+    val reader = BufferedReader(InputStreamReader(process.inputStream))
+    var line: String?
+    while (reader.readLine().also { line = it } != null) {
+        if (line?.contains("Name") == true) {
+            return true
+        }
+    }
+    return false
+}
+
+fun isNetworkConnectedLinuxUsingIp(): Boolean {
+    val process = Runtime.getRuntime().exec("ip addr show")
+    val reader = BufferedReader(InputStreamReader(process.inputStream))
+    var line: String?
+    while (reader.readLine().also { line = it } != null) {
+        if (line?.contains("inet ") == true && !line?.contains("lo")!!) {
+            return true
+        }
+    }
+    return false
+}
+
+fun isNetworkConnected(): Boolean {
+    val osName = System.getProperty("os.name").toLowerCase()
+    return if (osName.contains("win")) {
+        isNetworkConnectedWindows()
+    } else if (osName.contains("nix") || osName.contains("nux") || osName.contains("mac")) {
+        isNetworkConnectedLinuxUsingIp()
+    } else {
+        throw UnsupportedOperationException("Unsupported OS: $osName")
+    }
+}
+
 
 data class Config(val computerName: String)
-
-val url = "urlDB"
-val user = "user login DB"
-val password = "password"
 
 fun loadConfig(): Config {
     val configFile = File("config.json")
@@ -52,7 +86,7 @@ fun getNetworkInfo(): List<Pair<String, String?>> {
 fun updateDatabase(ip: String, mac: String, config: Config) {
     try {
         Class.forName("org.mariadb.jdbc.Driver") // Загрузка драйвера MariaDB
-        DriverManager.getConnection(url, user, password).use { conn -> // Добавляем имя пользователя и пароль
+        DriverManager.getConnection("url maria db", "user", "password").use { conn -> // Добавляем имя пользователя и пароль
             conn.autoCommit = false
             val callableStatement  = conn.prepareCall("{call update_device_info(?, ?, ?)}")
 
@@ -75,17 +109,43 @@ fun updateDatabase(ip: String, mac: String, config: Config) {
 }
 
 fun main() {
+
+    var isConnected = false
+    var dataSent = false
+
     val config = loadConfig()
-    println("Service started. Computer name: ${config.computerName}")
+    println("Произведен запуск сервиса")
 
     while (true) {
-        val networkInfo = getNetworkInfo()
-        networkInfo.forEachIndexed { id, (ip, mac) ->
-            if (id == 0) {
-                mac?.let { updateDatabase(ip, it, config) }
-            }
-        }
+        try {
+            val newIsConnected = isNetworkConnected()
 
-        Thread.sleep(60000) // Проверка каждую минуту
+            if (!isConnected && newIsConnected) {
+                println("Соединение установлено")
+
+                if (!dataSent) {
+                    val networkInfo = getNetworkInfo()
+                    networkInfo.forEachIndexed { id, (ip, mac) ->
+                        if (id == 0) {
+                            mac?.let { updateDatabase(ip, it, config) }
+                        }
+                    }
+
+                    dataSent = true
+                }
+
+                isConnected = true
+            } else if (isConnected && !newIsConnected) {
+                println("Соединение разорвано")
+                dataSent = false
+                isConnected = false
+            }
+
+            Thread.sleep(600000)
+
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Thread.sleep(600000)
+        }
     }
 }

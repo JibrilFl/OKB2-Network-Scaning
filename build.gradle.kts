@@ -26,6 +26,6 @@ application {
 
 ktor {
     fatJar {
-        archiveFileName.set("fat.jar")
+        archiveFileName.set("server.jar")
     }
 }
