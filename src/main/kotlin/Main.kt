@@ -20,24 +20,19 @@ fun isNetworkConnectedWindows(): Boolean {
     return false
 }
 
-fun isNetworkConnectedLinuxUsingIp(): Boolean {
-    val process = Runtime.getRuntime().exec("ip addr show")
+fun isNetworkConnectedLinux(): Boolean {
+    val process = Runtime.getRuntime().exec("nmcli -t -f STATE general")
     val reader = BufferedReader(InputStreamReader(process.inputStream))
-    var line: String?
-    while (reader.readLine().also { line = it } != null) {
-        if (line?.contains("inet ") == true && !line?.contains("lo")!!) {
-            return true
-        }
-    }
-    return false
+    val line = reader.readLine()
+    return line?.trim() == "connected"
 }
 
 fun isNetworkConnected(): Boolean {
     val osName = System.getProperty("os.name").toLowerCase()
     return if (osName.contains("win")) {
         isNetworkConnectedWindows()
-    } else if (osName.contains("nix") || osName.contains("nux") || osName.contains("mac")) {
-        isNetworkConnectedLinuxUsingIp()
+    } else if (osName.contains("nix") || osName.contains("linux") || osName.contains("nux") || osName.contains("mac")) {
+        isNetworkConnectedLinux()
     } else {
         throw UnsupportedOperationException("Unsupported OS: $osName")
     }
@@ -54,10 +49,10 @@ fun loadConfig(): Config {
             Config(json.getString("computerName"))
         } catch (e: Exception) {
             println("Error loading config: ${e.message}")
-            Config("Без имени") // Имя ПК по умолчанию
+            Config("Файл config заполнен неверно") // Имя ПК по умолчанию
         }
     } else {
-        Config("Без имени") // Имя ПК по умолчанию
+        Config("Не удается открыть файл config") // Имя ПК по умолчанию
     }
 }
 
@@ -86,7 +81,7 @@ fun getNetworkInfo(): List<Pair<String, String?>> {
 fun updateDatabase(ip: String, mac: String, config: Config) {
     try {
         Class.forName("org.mariadb.jdbc.Driver") // Загрузка драйвера MariaDB
-        DriverManager.getConnection("url maria db", "user", "password").use { conn -> // Добавляем имя пользователя и пароль
+        DriverManager.getConnection("url", "user", "password").use { conn -> // Добавляем имя пользователя и пароль
             conn.autoCommit = false
             val callableStatement  = conn.prepareCall("{call update_device_info(?, ?, ?)}")
 
@@ -141,11 +136,12 @@ fun main() {
                 isConnected = false
             }
 
-            Thread.sleep(600000)
+            Thread.sleep(3000)
 
         } catch (e: Exception) {
+            println("Не удается установить соединение")
             e.printStackTrace()
-            Thread.sleep(600000)
+            Thread.sleep(5000)
         }
     }
 }
