@@ -1,0 +1,31 @@
+Шаги:
+1 Создайте файл службы:
+sudo nano /etc/systemd/system/monitoringPc.service
+
+2 Добавьте следующее содержимое:
+
+[Unit]
+Description=pcMonitoringStatus
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/путь/к/вашему/jar/
+ExecStart=/usr/bin/java -jar /путь/к/вашему/jar/ваш_файл.jar
+Restart=always
+SuccessExitStatus=143
+
+[Install]
+WantedBy=multi-user.target
+
+3 Перезагрузите конфигурацию systemd:
+sudo systemctl daemon-reload
+
+4 Включите и запустите службу:
+sudo systemctl enable monitoringPc.service
+sudo systemctl start monitoringPc.service
+
+5 Проверьте статус службы:
+sudo systemctl status monitoringPc.service
+
+Теперь программа будет работать в фоновом режиме, без вывода в консоль, и автоматически запускаться при старте системы.
